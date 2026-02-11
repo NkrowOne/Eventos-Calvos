@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eventos Calvos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #1e1f22;
+      color: #dbdee1;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .card {
+      background-color: #2b2d31;
+      border-radius: 8px;
+      border: 1px solid #3f4147;
+    }
+    .phase-active {
+      background-color: #5865f2;
+      color: white;
+      box-shadow: 0 0 12px rgba(88, 101, 242, 0.5);
+    }
+    .phase-completed {
+      background-color: #248046;
+      color: white;
+    }
+    .phase-pending {
+      background-color: #3f4147;
+      color: #80848e;
+    }
+    .phase-connector {
+      height: 3px;
+      flex: 1;
+      min-width: 20px;
+    }
+    .phase-connector-active {
+      background-color: #248046;
+    }
+    .phase-connector-pending {
+      background-color: #3f4147;
+    }
+    .countdown-digit {
+      background-color: #1e1f22;
+      border: 1px solid #5865f2;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 1.75rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      min-width: 60px;
+      text-align: center;
+      color: #ffffff;
+    }
+    .badge-finalist {
+      background-color: #f0b232;
+      color: #1e1f22;
+      font-weight: 600;
+    }
+    .badge-advanced {
+      background-color: #248046;
+      color: white;
+    }
+    .badge-eliminated {
+      background-color: #da373c;
+      color: white;
+    }
+    .ranking-row:nth-child(1) .rank-badge { background-color: #f0b232; color: #1e1f22; }
+    .ranking-row:nth-child(2) .rank-badge { background-color: #a8b1bd; color: #1e1f22; }
+    .ranking-row:nth-child(3) .rank-badge { background-color: #b4703f; color: white; }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #23a559;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+    .tab-active {
+      border-bottom: 2px solid #5865f2;
+      color: #ffffff;
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #3f4147 25%, #4e5058 50%, #3f4147 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Header -->
+  <header class="card mx-4 mt-4 p-6 sm:mx-auto sm:max-w-5xl">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h1 id="event-name" class="text-2xl sm:text-3xl font-bold text-white">Eventos Calvos</h1>
+        <p id="event-description" class="text-sm text-[#80848e] mt-1">Cargando evento...</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="pulse-dot"></div>
+        <span id="phase-badge" class="text-sm font-semibold px-3 py-1 rounded-full bg-[#5865f2] text-white">--</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Phase Timeline -->
+  <section class="card mx-4 mt-4 p-6 sm:mx-auto sm:max-w-5xl">
+    <h2 class="text-sm font-semibold text-[#80848e] uppercase tracking-wider mb-4">Progreso del Evento</h2>
+    <div id="timeline" class="flex items-center justify-between gap-1 overflow-x-auto pb-2">
+      <!-- Phases rendered by JS -->
+    </div>
+  </section>
+
+  <!-- Countdown -->
+  <section id="countdown-section" class="card mx-4 mt-4 p-6 sm:mx-auto sm:max-w-5xl hidden">
+    <h2 id="countdown-label" class="text-sm font-semibold text-[#80848e] uppercase tracking-wider mb-4">Cuenta regresiva</h2>
+    <div class="flex items-center justify-center gap-3 flex-wrap">
+      <div class="text-center">
+        <div id="cd-days" class="countdown-digit">00</div>
+        <p class="text-xs text-[#80848e] mt-1">Dias</p>
+      </div>
+      <span class="text-2xl font-bold text-[#5865f2]">:</span>
+      <div class="text-center">
+        <div id="cd-hours" class="countdown-digit">00</div>
+        <p class="text-xs text-[#80848e] mt-1">Horas</p>
+      </div>
+      <span class="text-2xl font-bold text-[#5865f2]">:</span>
+      <div class="text-center">
+        <div id="cd-mins" class="countdown-digit">00</div>
+        <p class="text-xs text-[#80848e] mt-1">Minutos</p>
+      </div>
+      <span class="text-2xl font-bold text-[#5865f2]">:</span>
+      <div class="text-center">
+        <div id="cd-secs" class="countdown-digit">00</div>
+        <p class="text-xs text-[#80848e] mt-1">Segundos</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Cards -->
+  <section class="mx-4 mt-4 sm:mx-auto sm:max-w-5xl grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="card p-4 text-center">
+      <p class="text-2xl font-bold text-white" id="stat-participants">--</p>
+      <p class="text-xs text-[#80848e] mt-1">Participantes</p>
+    </div>
+    <div class="card p-4 text-center">
+      <p class="text-2xl font-bold text-white" id="stat-invites">--</p>
+      <p class="text-xs text-[#80848e] mt-1">Invitaciones</p>
+    </div>
+    <div class="card p-4 text-center">
+      <p class="text-2xl font-bold text-white" id="stat-votes">--</p>
+      <p class="text-xs text-[#80848e] mt-1">Votos Totales</p>
+    </div>
+    <div class="card p-4 text-center">
+      <p class="text-2xl font-bold text-white" id="stat-round">--</p>
+      <p class="text-xs text-[#80848e] mt-1">Ronda Actual</p>
+    </div>
+  </section>
+
+  <!-- Content Tabs -->
+  <section class="card mx-4 mt-4 mb-4 sm:mx-auto sm:max-w-5xl overflow-hidden">
+    <div class="flex border-b border-[#3f4147]">
+      <button onclick="switchTab('ranking')" id="tab-ranking" class="px-5 py-3 text-sm font-medium text-[#80848e] hover:text-white transition tab-active">Ranking</button>
+      <button onclick="switchTab('rounds')" id="tab-rounds" class="px-5 py-3 text-sm font-medium text-[#80848e] hover:text-white transition">Rondas</button>
+      <button onclick="switchTab('prizes')" id="tab-prizes" class="px-5 py-3 text-sm font-medium text-[#80848e] hover:text-white transition">Premios</button>
+    </div>
+
+    <!-- Ranking Tab -->
+    <div id="content-ranking" class="p-4">
+      <div id="ranking-table-container">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-[#80848e] text-left text-xs uppercase tracking-wider">
+              <th class="pb-3 px-2">#</th>
+              <th class="pb-3 px-2">Participante</th>
+              <th class="pb-3 px-2 text-right" id="ranking-col-header">Invitaciones</th>
+            </tr>
+          </thead>
+          <tbody id="ranking-body">
+            <tr><td colspan="3" class="py-8 text-center text-[#80848e]">Cargando ranking...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Rounds Tab -->
+    <div id="content-rounds" class="p-4 hidden">
+      <div id="rounds-container">
+        <p class="text-[#80848e] text-center py-8">Cargando rondas...</p>
+      </div>
+    </div>
+
+    <!-- Prizes Tab -->
+    <div id="content-prizes" class="p-4 hidden">
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="card p-6 text-center border-2 border-[#f0b232]">
+          <div class="text-4xl mb-2">&#127942;</div>
+          <h3 class="text-xl font-bold text-[#f0b232]">1er Lugar</h3>
+          <p class="text-white font-semibold mt-2">Tarjeta regalo de 25&#8364;</p>
+          <p class="text-[#80848e] text-sm mt-1">+ Rol exclusivo de ganador en el servidor</p>
+        </div>
+        <div class="card p-6 text-center border-2 border-[#a8b1bd]">
+          <div class="text-4xl mb-2">&#127941;</div>
+          <h3 class="text-xl font-bold text-[#a8b1bd]">2do Lugar</h3>
+          <p class="text-white font-semibold mt-2">Tarjeta regalo de 5&#8364;</p>
+          <p class="text-[#80848e] text-sm mt-1">+ Reconocimiento especial</p>
+        </div>
+      </div>
+      <div class="card p-4 mt-4">
+        <h4 class="font-semibold text-white mb-2">&#9888;&#65039; Reglas importantes</h4>
+        <ul class="text-sm text-[#80848e] space-y-1 list-disc list-inside">
+          <li>Los participantes deben mantener la etiqueta requerida en su nombre de Discord</li>
+          <li>Las invitaciones se validan tras 48 horas de permanencia</li>
+          <li>2 advertencias = descalificacion</li>
+          <li>Los votos de invitaciones se suman a los votos finales del participante que invito</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="text-center text-xs text-[#4e5058] py-6 mx-4">
+    <p>Eventos Calvos &mdash; Bot de Discord para eventos competitivos</p>
+    <p class="mt-1">Datos actualizados cada 30 segundos &bull; <span id="last-update">--</span></p>
+  </footer>
+
+  <!-- No Event State -->
+  <div id="no-event-overlay" class="hidden fixed inset-0 bg-[#1e1f22] flex items-center justify-center z-50">
+    <div class="card p-8 text-center max-w-md mx-4">
+      <div class="text-5xl mb-4">&#128564;</div>
+      <h2 class="text-xl font-bold text-white mb-2">No hay evento activo</h2>
+      <p class="text-[#80848e]">Actualmente no hay ningun evento en curso. Vuelve pronto para ver el proximo evento.</p>
+      <p class="text-xs text-[#4e5058] mt-4">Se reintentara automaticamente...</p>
+    </div>
+  </div>
+
+  <script>
+    // Phase name mappings
+    const PHASE_NAMES = {
+      'REGISTRATION': 'Inscripcion',
+      'GROUP_STAGE': 'Rondas por Grupos',
+      'BRIEFING': 'Briefing Finalistas',
+      'FINAL_VOTING': 'Votacion Final',
+      'CLOSED': 'Finalizado',
+    };
+    const PHASE_ORDER = ['REGISTRATION', 'GROUP_STAGE', 'BRIEFING', 'FINAL_VOTING', 'CLOSED'];
+
+    // State
+    let currentEvent = null;
+    let currentRanking = [];
+    let currentRankingPhase = null;
+    let currentRounds = [];
+    let countdownTarget = null;
+
+    // Tab switching
+    function switchTab(tab) {
+      ['ranking', 'rounds', 'prizes'].forEach(t => {
+        document.getElementById('content-' + t).classList.toggle('hidden', t !== tab);
+        document.getElementById('tab-' + t).classList.toggle('tab-active', t === tab);
+      });
+    }
+
+    // Render timeline
+    function renderTimeline(currentPhase) {
+      const container = document.getElementById('timeline');
+      container.innerHTML = '';
+      const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+
+      PHASE_ORDER.forEach((phase, i) => {
+        if (i > 0) {
+          const conn = document.createElement('div');
+          conn.className = 'phase-connector ' + (i <= currentIdx ? 'phase-connector-active' : 'phase-connector-pending');
+          container.appendChild(conn);
+        }
+
+        const el = document.createElement('div');
+        el.className = 'flex flex-col items-center flex-shrink-0';
+        const dot = document.createElement('div');
+        dot.className = 'px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap ';
+        if (i < currentIdx) {
+          dot.className += 'phase-completed';
+        } else if (i === currentIdx) {
+          dot.className += 'phase-active';
+        } else {
+          dot.className += 'phase-pending';
+        }
+        dot.textContent = PHASE_NAMES[phase];
+        el.appendChild(dot);
+        container.appendChild(el);
+      });
+    }
+
+    // Update countdown
+    function updateCountdown() {
+      if (!countdownTarget) return;
+      const now = Date.now();
+      const diff = countdownTarget - now;
+
+      if (diff <= 0) {
+        document.getElementById('cd-days').textContent = '00';
+        document.getElementById('cd-hours').textContent = '00';
+        document.getElementById('cd-mins').textContent = '00';
+        document.getElementById('cd-secs').textContent = '00';
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+      document.getElementById('cd-days').textContent = String(days).padStart(2, '0');
+      document.getElementById('cd-hours').textContent = String(hours).padStart(2, '0');
+      document.getElementById('cd-mins').textContent = String(mins).padStart(2, '0');
+      document.getElementById('cd-secs').textContent = String(secs).padStart(2, '0');
+    }
+    setInterval(updateCountdown, 1000);
+
+    // Render event data
+    function renderEvent(event) {
+      if (!event) {
+        document.getElementById('no-event-overlay').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('no-event-overlay').classList.add('hidden');
+
+      document.getElementById('event-name').textContent = event.name;
+      document.getElementById('event-description').textContent = event.description || 'Evento activo';
+      document.getElementById('phase-badge').textContent = PHASE_NAMES[event.phase] || event.phase;
+
+      renderTimeline(event.phase);
+
+      // Stats
+      document.getElementById('stat-participants').textContent = event.participantCount || 0;
+      document.getElementById('stat-invites').textContent = event.inviteCount || 0;
+      document.getElementById('stat-votes').textContent = event.totalVotes || 0;
+      document.getElementById('stat-round').textContent = event.currentRound ? 'Ronda ' + event.currentRound.number : '--';
+
+      // Countdown
+      const cdSection = document.getElementById('countdown-section');
+      if (event.countdown && event.countdown.remaining > 0) {
+        cdSection.classList.remove('hidden');
+        document.getElementById('countdown-label').textContent = event.countdown.label;
+        countdownTarget = new Date(event.countdown.target).getTime();
+        updateCountdown();
+      } else {
+        cdSection.classList.add('hidden');
+        countdownTarget = null;
+      }
+    }
+
+    // Render ranking
+    function renderRanking(ranking, phase) {
+      const body = document.getElementById('ranking-body');
+      const header = document.getElementById('ranking-col-header');
+
+      const isFinal = phase === 'FINAL_VOTING' || phase === 'CLOSED';
+      header.textContent = isFinal ? 'Votos' : 'Invitaciones';
+
+      if (!ranking || ranking.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-[#80848e]">No hay participantes aun</td></tr>';
+        return;
+      }
+
+      body.innerHTML = ranking.map((p, i) => {
+        const pos = i + 1;
+        const badgeClass = pos <= 3 ? 'rank-badge' : '';
+        const finalistTag = p.isFinalist ? '<span class="ml-2 text-xs px-1.5 py-0.5 rounded badge-finalist">Finalista</span>' : '';
+        const value = isFinal ? p.totalVotes : (p.inviteCount || 0);
+
+        let positionDisplay = '';
+        if (pos === 1) positionDisplay = '<span class="rank-badge inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold" style="background:#f0b232;color:#1e1f22;">1</span>';
+        else if (pos === 2) positionDisplay = '<span class="rank-badge inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold" style="background:#a8b1bd;color:#1e1f22;">2</span>';
+        else if (pos === 3) positionDisplay = '<span class="rank-badge inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold" style="background:#b4703f;color:white;">3</span>';
+        else positionDisplay = '<span class="text-[#80848e]">' + pos + '</span>';
+
+        let extraCols = '';
+        if (isFinal) {
+          extraCols = '<span class="text-xs text-[#80848e] ml-2">(Votos: ' + (p.finalVotes || 0) + ' + Bonus: ' + (p.inviteBonus || 0) + ')</span>';
+        }
+
+        return '<tr class="ranking-row border-t border-[#3f4147] hover:bg-[#35373c] transition">' +
+          '<td class="py-3 px-2">' + positionDisplay + '</td>' +
+          '<td class="py-3 px-2 text-white font-medium">' + escapeHtml(p.displayName) + finalistTag + '</td>' +
+          '<td class="py-3 px-2 text-right font-semibold text-white">' + value + extraCols + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // Render rounds
+    function renderRounds(rounds) {
+      const container = document.getElementById('rounds-container');
+
+      if (!rounds || rounds.length === 0) {
+        container.innerHTML = '<p class="text-[#80848e] text-center py-8">No hay rondas configuradas aun</p>';
+        return;
+      }
+
+      const statusNames = { 'CREATED': 'Creada', 'VOTING': 'En votacion', 'COMPLETED': 'Completada', 'CANCELLED': 'Cancelada' };
+      const statusColors = { 'CREATED': 'bg-[#5865f2]', 'VOTING': 'bg-[#f0b232] text-[#1e1f22]', 'COMPLETED': 'bg-[#248046]', 'CANCELLED': 'bg-[#da373c]' };
+
+      container.innerHTML = rounds.map(r => {
+        const statusBadge = '<span class="text-xs px-2 py-0.5 rounded-full font-semibold ' + (statusColors[r.status] || 'bg-[#3f4147]') + '">' + (statusNames[r.status] || r.status) + '</span>';
+        const dateStr = r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+        const groupsHtml = r.groups.map(g => {
+          const membersHtml = g.members.map(m => {
+            const badge = m.advanced === true ? '<span class="text-xs ml-1 px-1.5 py-0.5 rounded badge-advanced">Avanza</span>'
+              : m.advanced === false ? '<span class="text-xs ml-1 px-1.5 py-0.5 rounded badge-eliminated">Eliminado</span>' : '';
+            return '<div class="flex items-center gap-1 py-0.5">' +
+              '<span class="text-sm text-white">' + escapeHtml(m.displayName) + '</span>' + badge +
+              '</div>';
+          }).join('');
+
+          return '<div class="card p-3">' +
+            '<div class="flex items-center justify-between mb-2">' +
+            '<span class="text-sm font-semibold text-white">Grupo ' + g.number + '</span>' +
+            '<span class="text-xs text-[#80848e]">' + g.totalVotes + ' votos</span>' +
+            '</div>' +
+            '<div class="space-y-0.5">' + membersHtml + '</div>' +
+            '</div>';
+        }).join('');
+
+        return '<div class="mb-6">' +
+          '<div class="flex items-center gap-3 mb-3">' +
+          '<h3 class="text-lg font-bold text-white">Ronda ' + r.number + '</h3>' +
+          statusBadge +
+          (dateStr ? '<span class="text-xs text-[#80848e]">' + dateStr + '</span>' : '') +
+          '</div>' +
+          '<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">' + groupsHtml + '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    // HTML escape
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Load all data
+    async function loadData() {
+      try {
+        const [eventRes, rankingRes, roundsRes] = await Promise.all([
+          fetch('/api/event').then(r => r.json()),
+          fetch('/api/ranking').then(r => r.json()),
+          fetch('/api/rounds').then(r => r.json()),
+        ]);
+
+        currentEvent = eventRes.event;
+        currentRanking = rankingRes.ranking || [];
+        currentRankingPhase = rankingRes.phase;
+        currentRounds = roundsRes.rounds || [];
+
+        renderEvent(currentEvent);
+        renderRanking(currentRanking, currentRankingPhase);
+        renderRounds(currentRounds);
+
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString('es-ES');
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    }
+
+    // Initial load + auto refresh every 30s
+    loadData();
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>

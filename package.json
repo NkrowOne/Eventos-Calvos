@@ -1,12 +1,13 @@
 {
   "name": "eventos-calvos",
-  "version": "1.0.0",
-  "description": "Bot de Discord para el evento Nombres Locos",
+  "version": "2.0.0",
+  "description": "Bot de Discord para el evento Nombres Locos con panel web y MCP",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r src/web/public dist/web/public 2>/dev/null || true",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "mcp": "tsx src/mcp/server.ts",
     "deploy-commands": "tsx src/deploy-commands.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -15,12 +16,17 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
     "@prisma/client": "^6.3.0",
+    "cors": "^2.8.5",
     "discord.js": "^14.17.0",
     "dotenv": "^16.4.7",
+    "express": "^4.21.0",
     "node-cron": "^3.0.3"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
     "@types/node": "^22.12.0",
     "@types/node-cron": "^3.0.11",
     "prisma": "^6.3.0",

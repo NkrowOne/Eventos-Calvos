@@ -7,7 +7,12 @@ import {
 } from 'discord.js';
 import { COLORS, EMOJIS, CUSTOM_IDS } from '../types/index.js';
 
-export function createRegistrationEmbed(eventName: string, requiredTag: string | null) {
+export function createRegistrationEmbed(eventName: string, requiredTag: string | null, options?: { registrationEnd?: Date | null; webUrl?: string }) {
+  const deadlineText = options?.registrationEnd
+    ? `\n${EMOJIS.CLOCK} **Inscripciones hasta**: <t:${Math.floor(options.registrationEnd.getTime() / 1000)}:F> (<t:${Math.floor(options.registrationEnd.getTime() / 1000)}:R>)\n`
+    : '';
+  const webText = options?.webUrl ? `\n${EMOJIS.GLOBE} **Sigue el evento en directo**: ${options.webUrl}\n` : '';
+
   const embed = new EmbedBuilder()
     .setTitle(`${EMOJIS.FIRE} ${eventName} ${EMOJIS.FIRE}`)
     .setDescription(
@@ -17,14 +22,16 @@ export function createRegistrationEmbed(eventName: string, requiredTag: string |
       `${EMOJIS.TROPHY} **1er Lugar**: Tarjeta regalo de **25€** (Google Play, Apple, Spotify, Amazon o Netflix) + Rol exclusivo de ganador\n` +
       `${EMOJIS.MEDAL} **2do Lugar**: Tarjeta regalo de **5€**\n\n` +
       `**Cómo funciona:**\n` +
-      `1. Pulsa el botón para inscribirte\n` +
-      `2. Cambia tu nombre en el servidor al más divertido que se te ocurra\n` +
-      `3. Usa \`/invitar\` para traer amigos y conseguir votos extra\n` +
-      `4. Se votará por rondas hasta quedar un TOP 10\n` +
-      `5. Los finalistas harán un briefing y se hará una votación final\n\n` +
-      (requiredTag ? `${EMOJIS.WARNING} **Requisito**: Debes tener el tag del servidor equipado: \`${requiredTag}\`\n\n` : '') +
-      `${EMOJIS.STAR} Cada persona que invites al servidor = **1 voto extra** en la votación final\n` +
-      `${EMOJIS.WARNING} Los admins y moderadores no pueden participar`
+      `1. ${EMOJIS.CHECK} Pulsa el botón para inscribirte\n` +
+      `2. ${EMOJIS.FIRE} Cambia tu nombre en el servidor al más divertido que se te ocurra\n` +
+      `3. ${EMOJIS.LINK} Usa \`/invitar\` para traer amigos y conseguir votos extra\n` +
+      `4. ${EMOJIS.VOTE} Se votará por rondas (cada ronda un día) hasta quedar un TOP 10\n` +
+      `5. ${EMOJIS.CROWN} Los finalistas harán un briefing y se hará una votación final de 24h\n\n` +
+      (requiredTag ? `${EMOJIS.WARNING} **Requisito**: Debes tener el tag del servidor equipado: \`${requiredTag}\`\n` : '') +
+      deadlineText +
+      `\n${EMOJIS.STAR} Cada persona que invites al servidor = **1 voto extra** en la votación final\n` +
+      `${EMOJIS.WARNING} Los admins y moderadores no pueden participar` +
+      webText
     )
     .setColor(COLORS.PRIMARY)
     .setTimestamp()

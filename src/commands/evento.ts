@@ -55,7 +55,13 @@ export const data = new SlashCommandBuilder()
         opt.setName('nombre').setDescription('Nombre del evento').setRequired(true)
       )
       .addStringOption((opt) =>
+        opt.setName('descripcion').setDescription('Descripción del evento').setRequired(false)
+      )
+      .addStringOption((opt) =>
         opt.setName('tag').setDescription('Tag del servidor requerido (ej: CALVOS)').setRequired(false)
+      )
+      .addStringOption((opt) =>
+        opt.setName('cierre-inscripcion').setDescription('Fecha cierre inscripciones (YYYY-MM-DD HH:MM)').setRequired(false)
       )
   )
   .addSubcommand((sub) =>
@@ -119,6 +125,12 @@ export const data = new SlashCommandBuilder()
           .setMinValue(3)
           .setMaxValue(20)
       )
+      .addStringOption((opt) =>
+        opt.setName('fecha-ronda').setDescription('Día programado para la ronda (YYYY-MM-DD)').setRequired(false)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName('duracion-horas').setDescription('Duración de votación en horas (default: 24)').setRequired(false).setMinValue(1).setMaxValue(168)
+      )
   )
   .addSubcommand((sub) =>
     sub
@@ -172,16 +184,32 @@ export async function execute(interaction: CommandInteraction) {
 
 async function handleCrear(interaction: CommandInteraction) {
   const nombre = interaction.options.getString('nombre', true);
+  const descripcion = interaction.options.getString('descripcion');
   const tag = interaction.options.getString('tag');
+  const cierreStr = interaction.options.getString('cierre-inscripcion');
+
+  let registrationEnd: Date | undefined;
+  if (cierreStr) {
+    registrationEnd = new Date(cierreStr);
+    if (isNaN(registrationEnd.getTime())) {
+      await interaction.reply({ content: `${EMOJIS.CROSS} Formato de fecha inválido. Usa: YYYY-MM-DD HH:MM`, ephemeral: true });
+      return;
+    }
+  }
 
   const event = await createEvent({
     name: nombre,
     guildId: interaction.guildId!,
     channelId: interaction.channelId,
     requiredTag: tag || undefined,
+    description: descripcion || undefined,
+    registrationEnd,
   });
 
   await logAudit(event.id, interaction.user.id, 'CREATE_EVENT', `Evento creado: ${nombre}`);
+
+  const { config: appConfig } = await import('../config.js');
+  const webUrl = appConfig.web.publicUrl;
 
   await interaction.reply({
     embeds: [
@@ -189,9 +217,12 @@ async function handleCrear(interaction: CommandInteraction) {
         .setTitle(`${EMOJIS.CHECK} Evento creado`)
         .setDescription(
           `**${nombre}** ha sido creado.\n\n` +
+          (descripcion ? `${descripcion}\n\n` : '') +
           `Usa \`/evento config\` para configurar canales.\n` +
-          `Usa \`/evento publicar\` en el canal deseado para publicar la inscripción.` +
-          (tag ? `\n\nTag requerido: \`${tag}\`` : '')
+          `Usa \`/evento publicar\` en el canal deseado para publicar la inscripción.\n\n` +
+          (tag ? `${EMOJIS.WARNING} Tag requerido: \`${tag}\`\n` : '') +
+          (registrationEnd ? `${EMOJIS.CALENDAR} Cierre inscripciones: <t:${Math.floor(registrationEnd.getTime() / 1000)}:F>\n` : '') +
+          `${EMOJIS.GLOBE} Panel web: ${webUrl}`
         )
         .setColor(COLORS.SUCCESS),
     ],
@@ -214,7 +245,11 @@ async function handlePublicar(interaction: CommandInteraction) {
     return;
   }
 
-  const { embed, row } = createRegistrationEmbed(event.name, event.requiredTag);
+  const { config: appCfg } = await import('../config.js');
+  const { embed, row } = createRegistrationEmbed(event.name, event.requiredTag, {
+    registrationEnd: event.registrationEnd,
+    webUrl: appCfg.web.publicUrl,
+  });
   const message = await (interaction.channel as TextChannel).send({
     embeds: [embed],
     components: [row],
@@ -294,6 +329,8 @@ async function handleFase(interaction: CommandInteraction) {
   const accion = interaction.options.getString('accion', true);
   const advanceCount = interaction.options.getInteger('avanzan') ?? LIMITS.ADVANCE_PER_GROUP;
   const groupSize = interaction.options.getInteger('tamano-grupo') ?? LIMITS.GROUP_SIZE;
+  const fechaRondaStr = interaction.options.getString('fecha-ronda');
+  const duracionHoras = interaction.options.getInteger('duracion-horas') ?? 24;
 
   await interaction.deferReply({ ephemeral: true });
 
@@ -333,8 +370,9 @@ async function handleFase(interaction: CommandInteraction) {
         return;
       }
 
-      const round = await createRound(event.id, advanceCount);
-      const groups = await createGroups(round.id, participantIds, groupSize);
+      const scheduledDate = fechaRondaStr ? new Date(fechaRondaStr) : undefined;
+      const round = await createRound(event.id, advanceCount, scheduledDate);
+      const groups = await createGroups(round.id, event.id, participantIds, groupSize);
 
       await logAudit(
         event.id,
@@ -364,7 +402,8 @@ async function handleFase(interaction: CommandInteraction) {
         return;
       }
 
-      await openVoting(round.id);
+      const votingEndDate = new Date(Date.now() + duracionHoras * 60 * 60 * 1000);
+      await openVoting(round.id, votingEndDate);
       await updateEventPhase(event.id, EventPhase.GROUP_STAGE);
 
       const channel = interaction.guild!.channels.cache.get(event.votingChannelId) as TextChannel;
@@ -515,7 +554,13 @@ async function handleFase(interaction: CommandInteraction) {
         return;
       }
 
-      await updateEventPhase(event.id, EventPhase.FINAL_VOTING);
+      const finalStart = new Date();
+      const finalEnd = new Date(finalStart.getTime() + 24 * 60 * 60 * 1000);
+      const { prisma: db } = await import('../database/client.js');
+      await db.event.update({
+        where: { id: event.id },
+        data: { phase: EventPhase.FINAL_VOTING, finalVotingStart: finalStart, finalVotingEnd: finalEnd },
+      });
 
       const channel = interaction.guild!.channels.cache.get(event.votingChannelId) as TextChannel;
       if (channel) {
@@ -529,10 +574,12 @@ async function handleFase(interaction: CommandInteraction) {
         await channel.send({ embeds: [embed], components: rows });
       }
 
-      await logAudit(event.id, interaction.user.id, 'OPEN_FINAL_VOTING', '24h votación final');
+      const endTimestamp = Math.floor(finalEnd.getTime() / 1000);
+      await logAudit(event.id, interaction.user.id, 'OPEN_FINAL_VOTING', `Cierra: ${finalEnd.toISOString()}`);
       await interaction.editReply(
         `${EMOJIS.VOTE} **Votación final abierta** en <#${event.votingChannelId}>.\n` +
-        `Durará **24 horas**. Usa \`/evento fase accion:Cerrar votación final\` para cerrar manualmente.`
+        `${EMOJIS.CLOCK} Cierra automáticamente: <t:${endTimestamp}:F> (<t:${endTimestamp}:R>)\n` +
+        `Puedes cerrar manualmente con \`/evento fase accion:Cerrar votación final\``
       );
       break;
     }
@@ -669,16 +716,25 @@ async function handleInfo(interaction: CommandInteraction) {
     CLOSED: 'Finalizado',
   };
 
+  const { config: appConfig } = await import('../config.js');
+  const fmt = (d: Date | null) => d ? `<t:${Math.floor(d.getTime() / 1000)}:F>` : 'No establecida';
+
   const embed = new EmbedBuilder()
     .setTitle(`${EMOJIS.STAR} ${event.name}`)
     .setDescription(
+      (event.description ? `${event.description}\n\n` : '') +
       `**Fase**: ${phaseNames[event.phase]}\n` +
       `**Participantes activos**: ${participantCount}\n` +
       `**Finalistas**: ${finalists.length}\n` +
       (event.requiredTag ? `**Tag requerido**: \`${event.requiredTag}\`\n` : '') +
-      (event.warningChannelId ? `**Canal avisos**: <#${event.warningChannelId}>\n` : '⚠️ Sin canal de avisos\n') +
-      (event.votingChannelId ? `**Canal votación**: <#${event.votingChannelId}>\n` : '⚠️ Sin canal de votación\n') +
-      (currentRound ? `**Ronda actual**: ${currentRound.roundNumber} (${currentRound.status})` : '')
+      `\n${EMOJIS.CALENDAR} **Fechas:**\n` +
+      `Cierre inscripciones: ${fmt(event.registrationEnd)}\n` +
+      (event.finalVotingStart ? `Votación final: ${fmt(event.finalVotingStart)} → ${fmt(event.finalVotingEnd)}\n` : '') +
+      `\n**Canales:**\n` +
+      (event.warningChannelId ? `Avisos: <#${event.warningChannelId}>\n` : '⚠️ Sin canal de avisos\n') +
+      (event.votingChannelId ? `Votación: <#${event.votingChannelId}>\n` : '⚠️ Sin canal de votación\n') +
+      (currentRound ? `\n**Ronda actual**: ${currentRound.roundNumber} (${currentRound.status})` : '') +
+      `\n\n${EMOJIS.GLOBE} **Panel web**: ${appConfig.web.publicUrl}`
     )
     .setColor(COLORS.INFO)
     .setTimestamp();

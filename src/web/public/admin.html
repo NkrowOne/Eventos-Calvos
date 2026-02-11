@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Eventos Calvos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #1e1f22;
+      color: #dbdee1;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .card {
+      background-color: #2b2d31;
+      border-radius: 8px;
+      border: 1px solid #3f4147;
+    }
+    .tab-btn {
+      padding: 10px 18px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #80848e;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: #dbdee1; }
+    .tab-btn.active {
+      color: #ffffff;
+      border-bottom-color: #5865f2;
+    }
+    .stat-card {
+      background-color: #2b2d31;
+      border: 1px solid #3f4147;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #80848e;
+      margin-top: 4px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+    }
+    .badge-active { background-color: #248046; color: white; }
+    .badge-warning { background-color: #f0b232; color: #1e1f22; }
+    .badge-disqualified { background-color: #da373c; color: white; }
+    .badge-withdrawn { background-color: #80848e; color: white; }
+    .badge-finalist { background-color: #5865f2; color: white; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #80848e;
+      border-bottom: 1px solid #3f4147;
+    }
+    td {
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      border-bottom: 1px solid #3f4147;
+    }
+    tr:hover { background-color: #35373c; }
+    input, select {
+      background-color: #1e1f22;
+      border: 1px solid #3f4147;
+      border-radius: 6px;
+      color: #dbdee1;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: #5865f2; }
+    .btn-primary {
+      background-color: #5865f2;
+      color: white;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.15s;
+    }
+    .btn-primary:hover { background-color: #4752c4; }
+    .log-container {
+      background-color: #1e1f22;
+      border: 1px solid #3f4147;
+      border-radius: 6px;
+      padding: 16px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+      max-height: 500px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #a8b1bd;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #23a559;
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+    .phase-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: #1e1f22; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #3f4147; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Auth Overlay -->
+  <div id="auth-overlay" class="fixed inset-0 bg-[#1e1f22] flex items-center justify-center z-50 hidden">
+    <div class="card p-8 max-w-sm w-full mx-4">
+      <h2 class="text-xl font-bold text-white mb-2">Panel de Administracion</h2>
+      <p class="text-sm text-[#80848e] mb-6">Introduce el token de administrador para acceder al panel.</p>
+      <div class="mb-4">
+        <input type="password" id="token-input" placeholder="Token de admin..." class="w-full" onkeydown="if(event.key==='Enter')authenticate()">
+      </div>
+      <button onclick="authenticate()" class="btn-primary w-full">Acceder</button>
+      <p id="auth-error" class="text-sm text-[#da373c] mt-3 hidden">Token invalido. Intenta de nuevo.</p>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="card mx-4 mt-4 p-4 sm:mx-auto sm:max-w-6xl">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-lg font-bold text-white">Admin Panel</h1>
+        <span class="pulse-dot"></span>
+        <span id="header-phase" class="phase-badge bg-[#5865f2] text-white">--</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="header-event-name" class="text-sm text-[#80848e]">--</span>
+        <button onclick="logout()" class="text-xs text-[#da373c] hover:underline cursor-pointer">Cerrar sesion</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tab Navigation -->
+  <nav class="mx-4 mt-4 sm:mx-auto sm:max-w-6xl overflow-x-auto">
+    <div class="flex border-b border-[#3f4147]">
+      <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn active">Vista General</button>
+      <button onclick="switchTab('participants')" id="tab-participants" class="tab-btn">Participantes</button>
+      <button onclick="switchTab('invites')" id="tab-invites" class="tab-btn">Invitaciones</button>
+      <button onclick="switchTab('rounds')" id="tab-rounds" class="tab-btn">Rondas</button>
+      <button onclick="switchTab('audit')" id="tab-audit" class="tab-btn">Audit Log</button>
+      <button onclick="switchTab('system')" id="tab-system" class="tab-btn">Sistema</button>
+    </div>
+  </nav>
+
+  <!-- Tab Content -->
+  <main class="mx-4 mt-4 mb-8 sm:mx-auto sm:max-w-6xl">
+
+    <!-- Overview Tab -->
+    <div id="content-overview">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        <div class="stat-card">
+          <div class="stat-value" id="ov-total-participants">--</div>
+          <div class="stat-label">Total Participantes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="ov-active">--</div>
+          <div class="stat-label">Activos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="ov-warned">--</div>
+          <div class="stat-label">Con Advertencia</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="ov-disqualified">--</div>
+          <div class="stat-label">Descalificados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="ov-invites">--</div>
+          <div class="stat-label">Invitaciones</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="ov-votes">--</div>
+          <div class="stat-label">Votos</div>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold text-[#80848e] uppercase tracking-wider mb-3">Informacion del Evento</h3>
+          <div id="ov-event-info" class="space-y-2 text-sm">
+            <p class="text-[#80848e]">Cargando...</p>
+          </div>
+        </div>
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold text-[#80848e] uppercase tracking-wider mb-3">Resumen Rapido</h3>
+          <div id="ov-summary" class="space-y-2 text-sm">
+            <p class="text-[#80848e]">Cargando...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Participants Tab -->
+    <div id="content-participants" class="hidden">
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <select id="filter-status" onchange="renderParticipants()" class="text-sm">
+          <option value="">Todos los estados</option>
+          <option value="ACTIVE">Activos</option>
+          <option value="WARNING">Con advertencia</option>
+          <option value="DISQUALIFIED">Descalificados</option>
+          <option value="WITHDRAWN">Retirados</option>
+        </select>
+        <input type="text" id="filter-search" placeholder="Buscar por nombre..." oninput="renderParticipants()" class="text-sm flex-1 min-w-[200px]">
+        <span id="participant-count" class="text-xs text-[#80848e]">--</span>
+      </div>
+      <div class="card overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nombre</th>
+              <th>Nombre Actual</th>
+              <th>Estado</th>
+              <th>Advertencias</th>
+              <th>Finalista</th>
+              <th>Invitaciones</th>
+              <th>Votos</th>
+              <th>Grupos</th>
+              <th>Registro</th>
+            </tr>
+          </thead>
+          <tbody id="participants-body">
+            <tr><td colspan="10" class="text-center text-[#80848e] py-8">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Invites Tab -->
+    <div id="content-invites" class="hidden">
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <select id="filter-invite-status" onchange="renderInvites()" class="text-sm">
+          <option value="">Todas</option>
+          <option value="used">Usadas</option>
+          <option value="unused">No usadas</option>
+          <option value="validated">Validadas</option>
+        </select>
+        <input type="text" id="filter-invite-search" placeholder="Buscar por invitador..." oninput="renderInvites()" class="text-sm flex-1 min-w-[200px]">
+        <span id="invite-count" class="text-xs text-[#80848e]">--</span>
+      </div>
+      <div class="card overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Invitador</th>
+              <th>Invitado (ID)</th>
+              <th>Usada</th>
+              <th>Se unio</th>
+              <th>Validada</th>
+              <th>Creada</th>
+            </tr>
+          </thead>
+          <tbody id="invites-body">
+            <tr><td colspan="7" class="text-center text-[#80848e] py-8">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Rounds Tab -->
+    <div id="content-rounds" class="hidden">
+      <div id="rounds-container">
+        <p class="text-[#80848e] text-center py-8">Cargando rondas...</p>
+      </div>
+    </div>
+
+    <!-- Audit Tab -->
+    <div id="content-audit" class="hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <select id="audit-limit" onchange="loadAuditLogs()" class="text-sm">
+          <option value="50">Ultimos 50</option>
+          <option value="100">Ultimos 100</option>
+          <option value="200">Ultimos 200</option>
+        </select>
+        <button onclick="loadAuditLogs()" class="btn-primary text-sm">Recargar</button>
+      </div>
+      <div class="card overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Accion</th>
+              <th>Usuario</th>
+              <th>Detalles</th>
+            </tr>
+          </thead>
+          <tbody id="audit-body">
+            <tr><td colspan="4" class="text-center text-[#80848e] py-8">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- System Tab -->
+    <div id="content-system" class="hidden">
+      <div class="grid sm:grid-cols-3 gap-4 mb-4">
+        <div class="stat-card">
+          <div class="stat-value text-lg" id="sys-uptime">--</div>
+          <div class="stat-label">Tiempo activo</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-lg" id="sys-memory">--</div>
+          <div class="stat-label">Memoria (RSS)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-lg" id="sys-heap">--</div>
+          <div class="stat-label">Heap usado</div>
+        </div>
+      </div>
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-[#80848e] uppercase tracking-wider">Logs del Bot</h3>
+          <div class="flex items-center gap-2">
+            <select id="log-lines" class="text-sm">
+              <option value="50">50 lineas</option>
+              <option value="100" selected>100 lineas</option>
+              <option value="200">200 lineas</option>
+            </select>
+            <button onclick="loadBotLogs()" class="btn-primary text-sm">Recargar</button>
+          </div>
+        </div>
+        <div id="bot-logs" class="log-container scrollbar-thin">Cargando logs...</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Last update footer -->
+  <footer class="text-center text-xs text-[#4e5058] py-4">
+    Actualizacion automatica cada 15s &bull; Ultima: <span id="last-update">--</span>
+  </footer>
+
+  <script>
+    // ==================== AUTH ====================
+    const PHASE_NAMES = {
+      'REGISTRATION': 'Inscripcion',
+      'GROUP_STAGE': 'Rondas por Grupos',
+      'BRIEFING': 'Briefing Finalistas',
+      'FINAL_VOTING': 'Votacion Final',
+      'CLOSED': 'Finalizado',
+    };
+
+    let adminToken = localStorage.getItem('adminToken') || '';
+    let allParticipants = [];
+    let allInvites = [];
+
+    function getToken() {
+      return localStorage.getItem('adminToken') || '';
+    }
+
+    function apiUrl(path, extra) {
+      const token = getToken();
+      const sep = path.includes('?') ? '&' : '?';
+      return path + sep + 'token=' + encodeURIComponent(token) + (extra || '');
+    }
+
+    function checkAuth() {
+      if (!adminToken) {
+        document.getElementById('auth-overlay').classList.remove('hidden');
+        return false;
+      }
+      document.getElementById('auth-overlay').classList.add('hidden');
+      return true;
+    }
+
+    async function authenticate() {
+      const input = document.getElementById('token-input');
+      const val = input.value.trim();
+      if (!val) return;
+
+      // Test the token
+      try {
+        const res = await fetch(apiUrl('/api/admin/stats').replace('token=' + encodeURIComponent(getToken()), 'token=' + encodeURIComponent(val)));
+        if (res.status === 403) {
+          document.getElementById('auth-error').classList.remove('hidden');
+          return;
+        }
+        localStorage.setItem('adminToken', val);
+        adminToken = val;
+        document.getElementById('auth-overlay').classList.add('hidden');
+        document.getElementById('auth-error').classList.add('hidden');
+        loadAllData();
+      } catch (e) {
+        document.getElementById('auth-error').classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('adminToken');
+      adminToken = '';
+      document.getElementById('auth-overlay').classList.remove('hidden');
+      document.getElementById('token-input').value = '';
+    }
+
+    // ==================== TABS ====================
+    const TABS = ['overview', 'participants', 'invites', 'rounds', 'audit', 'system'];
+
+    function switchTab(tab) {
+      TABS.forEach(t => {
+        const content = document.getElementById('content-' + t);
+        const btn = document.getElementById('tab-' + t);
+        if (content) content.classList.toggle('hidden', t !== tab);
+        if (btn) btn.classList.toggle('active', t === tab);
+      });
+
+      // Load tab-specific data
+      if (tab === 'audit') loadAuditLogs();
+      if (tab === 'system') { loadBotLogs(); loadSystemInfo(); }
+    }
+
+    // ==================== HELPERS ====================
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function formatDate(d) {
+      if (!d) return '--';
+      return new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatUptime(seconds) {
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      const parts = [];
+      if (d > 0) parts.push(d + 'd');
+      if (h > 0) parts.push(h + 'h');
+      if (m > 0) parts.push(m + 'm');
+      parts.push(s + 's');
+      return parts.join(' ');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '--';
+      const mb = (bytes / 1024 / 1024).toFixed(1);
+      return mb + ' MB';
+    }
+
+    function statusBadge(status) {
+      const map = {
+        'ACTIVE': '<span class="badge badge-active">Activo</span>',
+        'WARNING': '<span class="badge badge-warning">Advertencia</span>',
+        'DISQUALIFIED': '<span class="badge badge-disqualified">Descalificado</span>',
+        'WITHDRAWN': '<span class="badge badge-withdrawn">Retirado</span>',
+      };
+      return map[status] || '<span class="badge" style="background:#3f4147;">' + escapeHtml(status) + '</span>';
+    }
+
+    // ==================== OVERVIEW ====================
+    async function loadOverview() {
+      try {
+        const [eventRes, statsRes] = await Promise.all([
+          fetch('/api/event').then(r => r.json()),
+          fetch(apiUrl('/api/admin/stats')).then(r => r.json()),
+        ]);
+
+        const event = eventRes.event;
+        const stats = statsRes.stats;
+
+        if (event) {
+          document.getElementById('header-phase').textContent = PHASE_NAMES[event.phase] || event.phase;
+          document.getElementById('header-event-name').textContent = event.name;
+        }
+
+        if (stats) {
+          document.getElementById('ov-total-participants').textContent = stats.totalParticipants;
+          document.getElementById('ov-active').textContent = stats.activeParticipants;
+          document.getElementById('ov-warned').textContent = stats.warned;
+          document.getElementById('ov-disqualified').textContent = stats.disqualified;
+          document.getElementById('ov-invites').textContent = stats.totalInvites + ' (' + stats.validInvites + ' validas)';
+          document.getElementById('ov-votes').textContent = stats.totalVotes;
+        }
+
+        if (event) {
+          document.getElementById('ov-event-info').innerHTML =
+            '<div class="flex justify-between"><span class="text-[#80848e]">Nombre:</span><span class="text-white">' + escapeHtml(event.name) + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Fase:</span><span class="text-white">' + (PHASE_NAMES[event.phase] || event.phase) + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Etiqueta:</span><span class="text-white font-mono">' + escapeHtml(event.requiredTag || '--') + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Cierre inscripcion:</span><span class="text-white">' + formatDate(event.registrationEnd) + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Fin briefing:</span><span class="text-white">' + formatDate(event.briefingEnd) + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Votacion final:</span><span class="text-white">' + formatDate(event.finalVotingStart) + ' - ' + formatDate(event.finalVotingEnd) + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Creado:</span><span class="text-white">' + formatDate(event.createdAt) + '</span></div>';
+        }
+
+        if (stats) {
+          const inviteRate = stats.totalInvites > 0 ? ((stats.validInvites / stats.totalInvites) * 100).toFixed(1) : '0';
+          const warnRate = stats.totalParticipants > 0 ? ((stats.warned / stats.totalParticipants) * 100).toFixed(1) : '0';
+          document.getElementById('ov-summary').innerHTML =
+            '<div class="flex justify-between"><span class="text-[#80848e]">Rondas jugadas:</span><span class="text-white">' + stats.rounds + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Tasa validacion invites:</span><span class="text-white">' + inviteRate + '%</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">% con advertencia:</span><span class="text-white">' + warnRate + '%</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Memoria:</span><span class="text-white">' + formatBytes(stats.memory?.rss) + '</span></div>' +
+            '<div class="flex justify-between"><span class="text-[#80848e]">Uptime:</span><span class="text-white">' + formatUptime(stats.uptime) + '</span></div>';
+        }
+      } catch (e) {
+        console.error('Error loading overview:', e);
+      }
+    }
+
+    // ==================== PARTICIPANTS ====================
+    async function loadParticipants() {
+      try {
+        const res = await fetch(apiUrl('/api/admin/participants'));
+        if (res.status === 403) { logout(); return; }
+        const data = await res.json();
+        allParticipants = data.participants || [];
+        renderParticipants();
+      } catch (e) {
+        console.error('Error loading participants:', e);
+      }
+    }
+
+    function renderParticipants() {
+      const statusFilter = document.getElementById('filter-status').value;
+      const searchFilter = document.getElementById('filter-search').value.toLowerCase();
+
+      let filtered = allParticipants;
+      if (statusFilter) filtered = filtered.filter(p => p.status === statusFilter);
+      if (searchFilter) filtered = filtered.filter(p =>
+        (p.displayName || '').toLowerCase().includes(searchFilter) ||
+        (p.currentName || '').toLowerCase().includes(searchFilter) ||
+        (p.userId || '').includes(searchFilter)
+      );
+
+      document.getElementById('participant-count').textContent = filtered.length + ' de ' + allParticipants.length + ' participantes';
+
+      const body = document.getElementById('participants-body');
+      if (filtered.length === 0) {
+        body.innerHTML = '<tr><td colspan="10" class="text-center text-[#80848e] py-8">No se encontraron participantes</td></tr>';
+        return;
+      }
+
+      body.innerHTML = filtered.map((p, i) => {
+        return '<tr>' +
+          '<td class="text-[#80848e]">' + (i + 1) + '</td>' +
+          '<td class="text-white font-medium">' + escapeHtml(p.displayName) + '</td>' +
+          '<td>' + escapeHtml(p.currentName || '--') + '</td>' +
+          '<td>' + statusBadge(p.status) + '</td>' +
+          '<td class="text-center">' + (p.warningCount > 0 ? '<span class="text-[#f0b232] font-bold">' + p.warningCount + '</span>' : '0') + '</td>' +
+          '<td class="text-center">' + (p.isFinalist ? '<span class="badge badge-finalist">Si</span>' : '--') + '</td>' +
+          '<td class="text-center">' + p.invitesSent + '</td>' +
+          '<td class="text-center">' + p.votesReceived + '</td>' +
+          '<td class="text-center">' + p.groupsParticipated + '</td>' +
+          '<td class="text-[#80848e] text-xs">' + formatDate(p.createdAt) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // ==================== INVITES ====================
+    async function loadInvites() {
+      try {
+        const res = await fetch(apiUrl('/api/admin/invites'));
+        if (res.status === 403) { logout(); return; }
+        const data = await res.json();
+        allInvites = data.invites || [];
+        renderInvites();
+      } catch (e) {
+        console.error('Error loading invites:', e);
+      }
+    }
+
+    function renderInvites() {
+      const statusFilter = document.getElementById('filter-invite-status').value;
+      const searchFilter = document.getElementById('filter-invite-search').value.toLowerCase();
+
+      let filtered = allInvites;
+      if (statusFilter === 'used') filtered = filtered.filter(i => i.used);
+      if (statusFilter === 'unused') filtered = filtered.filter(i => !i.used);
+      if (statusFilter === 'validated') filtered = filtered.filter(i => i.validatedAt);
+      if (searchFilter) filtered = filtered.filter(i =>
+        (i.inviter || '').toLowerCase().includes(searchFilter) ||
+        (i.code || '').toLowerCase().includes(searchFilter)
+      );
+
+      document.getElementById('invite-count').textContent = filtered.length + ' de ' + allInvites.length + ' invitaciones';
+
+      const body = document.getElementById('invites-body');
+      if (filtered.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="text-center text-[#80848e] py-8">No se encontraron invitaciones</td></tr>';
+        return;
+      }
+
+      body.innerHTML = filtered.map(i => {
+        const usedBadge = i.used
+          ? '<span class="badge badge-active">Si</span>'
+          : '<span class="badge" style="background:#3f4147;color:#80848e;">No</span>';
+        const validBadge = i.validatedAt
+          ? '<span class="badge badge-active">' + formatDate(i.validatedAt) + '</span>'
+          : '<span class="text-[#80848e]">--</span>';
+        return '<tr>' +
+          '<td class="font-mono text-xs text-white">' + escapeHtml(i.code) + '</td>' +
+          '<td class="text-white">' + escapeHtml(i.inviter) + '</td>' +
+          '<td class="font-mono text-xs text-[#80848e]">' + (i.invitedUserId || '--') + '</td>' +
+          '<td>' + usedBadge + '</td>' +
+          '<td class="text-xs text-[#80848e]">' + formatDate(i.joinedAt) + '</td>' +
+          '<td>' + validBadge + '</td>' +
+          '<td class="text-xs text-[#80848e]">' + formatDate(i.createdAt) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // ==================== ROUNDS ====================
+    async function loadRounds() {
+      try {
+        const res = await fetch('/api/rounds');
+        const data = await res.json();
+        const rounds = data.rounds || [];
+        const container = document.getElementById('rounds-container');
+
+        if (rounds.length === 0) {
+          container.innerHTML = '<p class="text-[#80848e] text-center py-8">No hay rondas configuradas aun</p>';
+          return;
+        }
+
+        const statusNames = { 'CREATED': 'Creada', 'VOTING': 'En votacion', 'COMPLETED': 'Completada', 'CANCELLED': 'Cancelada' };
+        const statusColors = { 'CREATED': 'bg-[#5865f2]', 'VOTING': 'bg-[#f0b232] text-[#1e1f22]', 'COMPLETED': 'bg-[#248046]', 'CANCELLED': 'bg-[#da373c]' };
+
+        container.innerHTML = rounds.map(r => {
+          const sBadge = '<span class="badge ' + (statusColors[r.status] || '') + '">' + (statusNames[r.status] || r.status) + '</span>';
+          const dateStr = r.scheduledDate ? formatDate(r.scheduledDate) : '--';
+          const votingStr = r.votingStart ? formatDate(r.votingStart) + ' - ' + formatDate(r.votingEnd) : '--';
+
+          const groupsHtml = r.groups.map(g => {
+            const membersHtml = g.members.map(m => {
+              const adv = m.advanced === true ? '<span class="badge badge-active ml-1">Avanza</span>'
+                : m.advanced === false ? '<span class="badge badge-disqualified ml-1">Eliminado</span>' : '';
+              return '<div class="py-1 flex items-center">' +
+                '<span class="text-sm text-white">' + escapeHtml(m.displayName) + '</span>' + adv +
+                '</div>';
+            }).join('');
+
+            return '<div class="card p-3">' +
+              '<div class="flex items-center justify-between mb-2">' +
+              '<span class="text-sm font-semibold text-white">Grupo ' + g.number + '</span>' +
+              '<span class="text-xs text-[#80848e]">' + g.totalVotes + ' votos</span>' +
+              '</div>' + membersHtml + '</div>';
+          }).join('');
+
+          return '<div class="mb-6">' +
+            '<div class="flex items-center gap-3 mb-2 flex-wrap">' +
+            '<h3 class="text-lg font-bold text-white">Ronda ' + r.number + '</h3>' + sBadge +
+            '<span class="text-xs text-[#80848e]">Programada: ' + dateStr + '</span>' +
+            '<span class="text-xs text-[#80848e]">Votacion: ' + votingStr + '</span>' +
+            '</div>' +
+            '<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">' + groupsHtml + '</div>' +
+            '</div>';
+        }).join('');
+      } catch (e) {
+        console.error('Error loading rounds:', e);
+      }
+    }
+
+    // ==================== AUDIT ====================
+    async function loadAuditLogs() {
+      try {
+        const limit = document.getElementById('audit-limit').value;
+        const res = await fetch(apiUrl('/api/admin/audit', '&limit=' + limit));
+        if (res.status === 403) { logout(); return; }
+        const data = await res.json();
+        const logs = data.logs || [];
+
+        const body = document.getElementById('audit-body');
+        if (logs.length === 0) {
+          body.innerHTML = '<tr><td colspan="4" class="text-center text-[#80848e] py-8">No hay entradas en el log</td></tr>';
+          return;
+        }
+
+        body.innerHTML = logs.map(l => {
+          let details = '';
+          if (l.details) {
+            try {
+              const d = typeof l.details === 'string' ? JSON.parse(l.details) : l.details;
+              details = '<code class="text-xs text-[#a8b1bd] break-all">' + escapeHtml(JSON.stringify(d, null, 0)) + '</code>';
+            } catch {
+              details = '<span class="text-xs text-[#80848e]">' + escapeHtml(String(l.details)) + '</span>';
+            }
+          }
+          return '<tr>' +
+            '<td class="text-xs text-[#80848e] whitespace-nowrap">' + formatDate(l.createdAt) + '</td>' +
+            '<td class="text-white font-medium text-sm">' + escapeHtml(l.action) + '</td>' +
+            '<td class="font-mono text-xs text-[#80848e]">' + (l.userId || '--') + '</td>' +
+            '<td class="max-w-xs overflow-hidden">' + details + '</td>' +
+            '</tr>';
+        }).join('');
+      } catch (e) {
+        console.error('Error loading audit logs:', e);
+      }
+    }
+
+    // ==================== SYSTEM ====================
+    async function loadSystemInfo() {
+      try {
+        const res = await fetch(apiUrl('/api/admin/stats'));
+        if (res.status === 403) { logout(); return; }
+        const data = await res.json();
+        const stats = data.stats;
+        if (stats) {
+          document.getElementById('sys-uptime').textContent = formatUptime(stats.uptime);
+          document.getElementById('sys-memory').textContent = formatBytes(stats.memory?.rss);
+          document.getElementById('sys-heap').textContent = formatBytes(stats.memory?.heapUsed) + ' / ' + formatBytes(stats.memory?.heapTotal);
+        }
+      } catch (e) {
+        console.error('Error loading system info:', e);
+      }
+    }
+
+    async function loadBotLogs() {
+      try {
+        const lines = document.getElementById('log-lines').value;
+        const res = await fetch(apiUrl('/api/admin/logs', '&lines=' + lines));
+        if (res.status === 403) { logout(); return; }
+        const data = await res.json();
+        const logs = data.logs;
+        const container = document.getElementById('bot-logs');
+
+        if (Array.isArray(logs)) {
+          container.textContent = logs.join('\n') || 'No hay logs disponibles.';
+        } else if (typeof logs === 'string') {
+          container.textContent = logs || 'No hay logs disponibles.';
+        } else {
+          container.textContent = 'No hay logs disponibles.';
+        }
+
+        // Scroll to bottom
+        container.scrollTop = container.scrollHeight;
+      } catch (e) {
+        console.error('Error loading bot logs:', e);
+        document.getElementById('bot-logs').textContent = 'Error al cargar los logs.';
+      }
+    }
+
+    // ==================== DATA LOADING ====================
+    async function loadAllData() {
+      if (!checkAuth()) return;
+
+      await Promise.all([
+        loadOverview(),
+        loadParticipants(),
+        loadInvites(),
+        loadRounds(),
+      ]);
+
+      document.getElementById('last-update').textContent = new Date().toLocaleTimeString('es-ES');
+    }
+
+    // Init
+    if (adminToken) {
+      loadAllData();
+    } else {
+      checkAuth();
+    }
+
+    // Auto-refresh every 15 seconds
+    setInterval(() => {
+      if (adminToken) loadAllData();
+    }, 15000);
+  </script>
+</body>
+</html>

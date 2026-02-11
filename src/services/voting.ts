@@ -2,9 +2,39 @@ import { prisma } from '../database/client.js';
 import { VoteType, RoundStatus } from '@prisma/client';
 import { LIMITS } from '../types/index.js';
 
+// --- Helpers: Anti-repeat pairings ---
+
+async function getPreviousPairings(eventId: string): Promise<Map<string, number>> {
+  const pairings = new Map<string, number>();
+
+  const previousRounds = await prisma.round.findMany({
+    where: { eventId, status: 'COMPLETED' },
+    include: {
+      groups: {
+        include: { members: true },
+      },
+    },
+  });
+
+  for (const round of previousRounds) {
+    for (const group of round.groups) {
+      const memberIds = group.members.map((m) => m.participantId);
+      // For each pair in the group, increment their co-occurrence
+      for (let i = 0; i < memberIds.length; i++) {
+        for (let j = i + 1; j < memberIds.length; j++) {
+          const key = [memberIds[i], memberIds[j]].sort().join(':');
+          pairings.set(key, (pairings.get(key) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  return pairings;
+}
+
 // --- Rondas y Grupos ---
 
-export async function createRound(eventId: string, advanceCount?: number) {
+export async function createRound(eventId: string, advanceCount?: number, scheduledDate?: Date) {
   const lastRound = await prisma.round.findFirst({
     where: { eventId },
     orderBy: { roundNumber: 'desc' },
@@ -17,21 +47,63 @@ export async function createRound(eventId: string, advanceCount?: number) {
       eventId,
       roundNumber,
       advanceCount: advanceCount ?? LIMITS.ADVANCE_PER_GROUP,
+      scheduledDate: scheduledDate || null,
     },
   });
 }
 
-export async function createGroups(roundId: string, participantIds: string[], groupSize: number = LIMITS.GROUP_SIZE) {
-  // Mezclar participantes aleatoriamente
+export async function createGroups(
+  roundId: string,
+  eventId: string,
+  participantIds: string[],
+  targetGroupSize: number = LIMITS.GROUP_SIZE,
+) {
+  // 1. Get previous pairings to avoid repeats
+  const previousPairings = await getPreviousPairings(eventId);
+
+  // 2. Calculate equitable group sizes
+  const count = participantIds.length;
+  const numGroups = Math.ceil(count / targetGroupSize);
+  // Distribute evenly: some groups get ceil(count/numGroups), others get floor
+  const baseSize = Math.floor(count / numGroups);
+  const extraGroups = count % numGroups; // this many groups get baseSize+1
+
+  // 3. Build groups minimizing co-occurrences
+  // Shuffle first, then use greedy assignment
   const shuffled = [...participantIds].sort(() => Math.random() - 0.5);
+  const groups: string[][] = Array.from({ length: numGroups }, () => []);
 
-  const groupCount = Math.ceil(shuffled.length / groupSize);
-  const groups = [];
+  for (const pid of shuffled) {
+    // Find the group with the least co-occurrence with this participant
+    // that still has capacity
+    let bestGroup = 0;
+    let bestScore = Infinity;
 
-  for (let i = 0; i < groupCount; i++) {
-    const start = i * groupSize;
-    const end = Math.min(start + groupSize, shuffled.length);
-    const memberIds = shuffled.slice(start, end);
+    for (let g = 0; g < numGroups; g++) {
+      const maxSize = g < extraGroups ? baseSize + 1 : baseSize;
+      if (groups[g].length >= maxSize) continue;
+
+      // Calculate co-occurrence score for this group
+      let score = 0;
+      for (const existingPid of groups[g]) {
+        const key = [pid, existingPid].sort().join(':');
+        score += previousPairings.get(key) || 0;
+      }
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestGroup = g;
+      }
+    }
+
+    groups[bestGroup].push(pid);
+  }
+
+  // 4. Create groups in DB
+  const createdGroups = [];
+
+  for (let i = 0; i < numGroups; i++) {
+    const memberIds = groups[i];
 
     const group = await prisma.group.create({
       data: {
@@ -46,16 +118,20 @@ export async function createGroups(roundId: string, participantIds: string[], gr
       include: { members: true },
     });
 
-    groups.push(group);
+    createdGroups.push(group);
   }
 
-  return groups;
+  return createdGroups;
 }
 
-export async function openVoting(roundId: string) {
+export async function openVoting(roundId: string, votingEnd?: Date) {
   return prisma.round.update({
     where: { id: roundId },
-    data: { status: RoundStatus.VOTING },
+    data: {
+      status: RoundStatus.VOTING,
+      votingStart: new Date(),
+      votingEnd: votingEnd || null,
+    },
   });
 }
 
@@ -101,9 +177,17 @@ export async function closeRound(roundId: string) {
     }
   }
 
+  // Set votingEnd to now if it wasn't already set
+  const updateData: { status: RoundStatus; votingEnd?: Date } = {
+    status: RoundStatus.COMPLETED,
+  };
+  if (!round.votingEnd) {
+    updateData.votingEnd = new Date();
+  }
+
   await prisma.round.update({
     where: { id: roundId },
-    data: { status: RoundStatus.COMPLETED },
+    data: updateData,
   });
 
   return advancedParticipantIds;
@@ -135,7 +219,7 @@ export async function getAdvancedParticipants(roundId: string) {
   return members.map((m) => m.participant);
 }
 
-// --- Votación en Grupos ---
+// --- Votacion en Grupos ---
 
 export async function voteInGroup(eventId: string, groupId: string, voterId: string, candidateId: string) {
   // Verificar que no se autovote
@@ -149,7 +233,7 @@ export async function voteInGroup(eventId: string, groupId: string, voterId: str
     where: { groupId, participantId: candidateId },
   });
   if (!isMember) {
-    return { success: false, reason: 'Ese participante no está en este grupo.' };
+    return { success: false, reason: 'Ese participante no esta en este grupo.' };
   }
 
   // Verificar voto existente en este grupo
@@ -181,7 +265,7 @@ export async function voteInGroup(eventId: string, groupId: string, voterId: str
   return { success: true };
 }
 
-// --- Votación Final ---
+// --- Votacion Final ---
 
 export async function voteFinal(eventId: string, voterId: string, candidateId: string) {
   // Verificar que el candidato es finalista
@@ -195,7 +279,7 @@ export async function voteFinal(eventId: string, voterId: string, candidateId: s
     where: { eventId_userId: { eventId, userId: voterId } },
   });
   if (voterAsParticipant?.isFinalist) {
-    return { success: false, reason: 'Los finalistas no pueden votar en la votación final.' };
+    return { success: false, reason: 'Los finalistas no pueden votar en la votacion final.' };
   }
 
   // Verificar voto existente
@@ -208,7 +292,7 @@ export async function voteFinal(eventId: string, voterId: string, candidateId: s
   });
 
   if (existing) {
-    return { success: false, reason: 'Ya has votado en la votación final.' };
+    return { success: false, reason: 'Ya has votado en la votacion final.' };
   }
 
   await prisma.vote.create({

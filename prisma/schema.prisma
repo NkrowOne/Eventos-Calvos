@@ -37,14 +37,22 @@ enum RoundStatus {
 model Event {
   id               String     @id @default(cuid())
   name             String
+  description      String?
   phase            EventPhase @default(REGISTRATION)
   guildId          String
-  channelId        String     // Canal donde se publica el evento
-  warningChannelId String?    // Canal de advertencias
-  votingChannelId  String?    // Canal de votación
-  messageId        String?    // Mensaje con botón de inscripción
-  requiredTag      String?    // Tag del servidor requerido
+  channelId        String
+  warningChannelId String?
+  votingChannelId  String?
+  messageId        String?
+  requiredTag      String?
   active           Boolean    @default(true)
+
+  // Fechas programadas
+  registrationEnd  DateTime?
+  briefingEnd      DateTime?
+  finalVotingStart DateTime?
+  finalVotingEnd   DateTime?
+
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -95,10 +103,16 @@ model Round {
   id          String      @id @default(cuid())
   eventId     String
   roundNumber Int
-  status      RoundStatus @default(CREATED)
-  advanceCount Int        @default(2) // Cuántos avanzan por grupo
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  status       RoundStatus @default(CREATED)
+  advanceCount Int         @default(2)
+
+  // Fechas de la ronda
+  scheduledDate DateTime?
+  votingStart   DateTime?
+  votingEnd     DateTime?
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   event  Event   @relation(fields: [eventId], references: [id])
   groups Group[]

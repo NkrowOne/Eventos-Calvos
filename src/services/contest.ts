@@ -13,8 +13,9 @@ export async function createEvent(data: {
   guildId: string;
   channelId: string;
   requiredTag?: string;
+  description?: string;
+  registrationEnd?: Date;
 }) {
-  // Desactivar cualquier evento anterior
   await prisma.event.updateMany({
     where: { guildId: data.guildId, active: true },
     data: { active: false },
@@ -26,6 +27,8 @@ export async function createEvent(data: {
       guildId: data.guildId,
       channelId: data.channelId,
       requiredTag: data.requiredTag || null,
+      description: data.description || null,
+      registrationEnd: data.registrationEnd || null,
     },
   });
 }

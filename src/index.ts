@@ -1,6 +1,8 @@
-import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { config } from './config.js';
 import { prisma } from './database/client.js';
+import { log } from './utils/logger.js';
+import { startWebServer } from './web/server.js';
 
 // Event imports
 import * as readyEvent from './events/ready.js';
@@ -30,9 +32,12 @@ client.on(guildMemberAddEvent.name, guildMemberAddEvent.execute);
 client.on(guildMemberUpdateEvent.name, guildMemberUpdateEvent.execute);
 client.on(guildMemberRemoveEvent.name, guildMemberRemoveEvent.execute);
 
+// Start web server
+startWebServer();
+
 // Graceful shutdown
 async function shutdown() {
-  console.log('[Bot] Apagando...');
+  log('INFO', 'Bot', 'Apagando...');
   await prisma.$disconnect();
   client.destroy();
   process.exit(0);
@@ -40,15 +45,13 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-// Handle unhandled rejections
 process.on('unhandledRejection', (error) => {
-  console.error('[Bot] Unhandled rejection:', error);
+  log('ERROR', 'Bot', 'Unhandled rejection', error);
 });
 
 // Login
-console.log('[Bot] Iniciando...');
+log('INFO', 'Bot', 'Iniciando...');
 client.login(config.discord.token).catch((error) => {
-  console.error('[Bot] Error al iniciar sesión:', error);
+  log('ERROR', 'Bot', 'Error al iniciar sesión', error);
   process.exit(1);
 });

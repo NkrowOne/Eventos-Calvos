@@ -18,5 +18,10 @@ export const config = {
   database: {
     url: required('DATABASE_URL'),
   },
+  web: {
+    port: parseInt(process.env.PORT || '3000', 10),
+    publicUrl: process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || '3000'}`,
+    adminToken: process.env.ADMIN_TOKEN || 'admin',
+  },
   nodeEnv: process.env.NODE_ENV || 'development',
 } as const;

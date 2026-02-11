@@ -55,6 +55,8 @@ export const EMOJIS = {
   PERSON: '👤',
   CLOCK: '⏰',
   GIFT: '🎁',
+  CALENDAR: '📅',
+  GLOBE: '🌐',
 } as const;
 
 export const LIMITS = {
