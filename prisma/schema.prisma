@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventPhase {
+  REGISTRATION
+  GROUP_STAGE
+  BRIEFING
+  FINAL_VOTING
+  CLOSED
+}
+
+enum ParticipantStatus {
+  ACTIVE
+  WARNING
+  DISQUALIFIED
+  WITHDRAWN
+}
+
+enum VoteType {
+  GROUP_VOTE
+  FINAL_VOTE
+  INVITE_BONUS
+}
+
+enum RoundStatus {
+  CREATED
+  VOTING
+  COMPLETED
+}
+
+model Event {
+  id               String     @id @default(cuid())
+  name             String
+  phase            EventPhase @default(REGISTRATION)
+  guildId          String
+  channelId        String     // Canal donde se publica el evento
+  warningChannelId String?    // Canal de advertencias
+  votingChannelId  String?    // Canal de votación
+  messageId        String?    // Mensaje con botón de inscripción
+  requiredTag      String?    // Tag del servidor requerido
+  active           Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  participants Participant[]
+  invites      Invite[]
+  rounds       Round[]
+  votes        Vote[]
+  auditLogs    AuditLog[]
+}
+
+model Participant {
+  id            String            @id @default(cuid())
+  eventId       String
+  userId        String            // Discord user ID
+  displayName   String            // Nombre inscrito
+  currentName   String?           // Nombre actual
+  status        ParticipantStatus @default(ACTIVE)
+  warningCount  Int               @default(0)
+  isFinalist    Boolean           @default(false)
+  finalPosition Int?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id])
+  invitesSent   Invite[]       @relation("Inviter")
+  votesReceived Vote[]         @relation("VotesReceived")
+  groupMembers  GroupMember[]
+
+  @@unique([eventId, userId])
+}
+
+model Invite {
+  id            String   @id @default(cuid())
+  eventId       String
+  inviterId     String   // Participant ID
+  inviteCode    String   @unique // Discord invite code
+  invitedUserId String?  // Discord user ID del invitado
+  used          Boolean  @default(false)
+  joinedAt      DateTime?
+  validatedAt   DateTime? // Se valida tras 24h de permanencia
+  createdAt     DateTime @default(now())
+
+  event   Event       @relation(fields: [eventId], references: [id])
+  inviter Participant @relation("Inviter", fields: [inviterId], references: [id])
+}
+
+model Round {
+  id          String      @id @default(cuid())
+  eventId     String
+  roundNumber Int
+  status      RoundStatus @default(CREATED)
+  advanceCount Int        @default(2) // Cuántos avanzan por grupo
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  event  Event   @relation(fields: [eventId], references: [id])
+  groups Group[]
+
+  @@unique([eventId, roundNumber])
+}
+
+model Group {
+  id          String @id @default(cuid())
+  roundId     String
+  groupNumber Int
+  messageId   String? // Mensaje de votación del grupo
+
+  round   Round         @relation(fields: [roundId], references: [id])
+  members GroupMember[]
+  votes   Vote[]
+
+  @@unique([roundId, groupNumber])
+}
+
+model GroupMember {
+  id            String  @id @default(cuid())
+  groupId       String
+  participantId String
+  advanced      Boolean @default(false)
+
+  group       Group       @relation(fields: [groupId], references: [id])
+  participant Participant @relation(fields: [participantId], references: [id])
+
+  @@unique([groupId, participantId])
+}
+
+model Vote {
+  id          String   @id @default(cuid())
+  eventId     String
+  voterId     String   // Discord user ID (no necesariamente participante)
+  candidateId String   // Participant ID
+  groupId     String?  // Null para FINAL_VOTE e INVITE_BONUS
+  voteType    VoteType
+  createdAt   DateTime @default(now())
+
+  event     Event       @relation(fields: [eventId], references: [id])
+  candidate Participant @relation("VotesReceived", fields: [candidateId], references: [id])
+  group     Group?      @relation(fields: [groupId], references: [id])
+
+  @@unique([eventId, voterId, groupId, voteType]) // Un voto por persona por grupo/tipo
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String   // Quién hizo la acción
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+}
